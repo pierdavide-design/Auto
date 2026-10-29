@@ -12,10 +12,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let isReady = false;
+let isAuthenticated = false;
 let currentQrImage = null;
+let statusMessage = "Inizializzazione del servizio in corso...";
+
+// Endpoint per la verifica rapida dello stato interno via JSON
+app.get('/status', (req, res) => {
+    res.json({
+        isReady,
+        isAuthenticated,
+        hasQr: !!currentQrImage,
+        statusMessage
+    });
+});
 
 // Endpoint per vedere lo stato e il QR code via browser
-app.get('/qr', async (req, res) => {
+app.get('/qr', (req, res) => {
     if (isReady) {
         return res.send(`
             <html>
@@ -30,8 +42,8 @@ app.get('/qr', async (req, res) => {
         return res.send(`
             <html>
                 <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
-                    <h2>In attesa del codice QR...</h2>
-                    <p>Ricarica la pagina tra qualche secondo.</p>
+                    <h2>${statusMessage}</h2>
+                    <p>Ricarica la pagina tra 10-15 secondi.</p>
                 </body>
             </html>
         `);
@@ -67,15 +79,12 @@ mongoose.connect(MONGO_URI).then(() => {
     const client = new Client({
         authStrategy: new RemoteAuth({
             store: store,
-            backupSyncIntervalMs: 300000
+            backupSyncIntervalMs: 600000 // Backup ogni 10 minuti per risparmiare memoria RAM
         }),
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-        },
         puppeteer: {
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
             headless: true,
+            authTimeoutMs: 120000,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -88,12 +97,18 @@ mongoose.connect(MONGO_URI).then(() => {
                 '--disable-extensions',
                 '--disable-component-update',
                 '--no-default-browser-check',
+                '--mute-audio',
+                '--disable-background-networking',
+                '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
                 '--js-flags="--max-old-space-size=256"'
             ]
         }
     });
 
     client.on('qr', async (qr) => {
+        isReady = false;
+        isAuthenticated = false;
+        statusMessage = "In attesa della scansione del codice QR...";
         console.log('[WHATSAPP] Nuovo codice QR generato.');
         qrcodeTerminal.generate(qr, { small: true });
         
@@ -104,9 +119,16 @@ mongoose.connect(MONGO_URI).then(() => {
         }
     });
 
+    client.on('authenticated', () => {
+        isAuthenticated = true;
+        statusMessage = "Autenticazione riuscita! Caricamento delle chat in corso...";
+        console.log('[WHATSAPP] Autenticazione completata con successo.');
+    });
+
     client.on('ready', () => {
         isReady = true;
         currentQrImage = null;
+        statusMessage = "WhatsApp è connesso e pronto!";
         console.log('[WHATSAPP] Client connesso e pronto!');
     });
 
@@ -114,15 +136,30 @@ mongoose.connect(MONGO_URI).then(() => {
         console.log('[WHATSAPP] Sessione salvata con successo su MongoDB!');
     });
 
+    client.on('auth_failure', (msg) => {
+        isReady = false;
+        isAuthenticated = false;
+        currentQrImage = null;
+        statusMessage = "Errore di autenticazione. Disconnetti la sessione dal telefono e riprova.";
+        console.error('[WHATSAPP ERRORE AUTH]:', msg);
+    });
+
     client.on('disconnected', (reason) => {
         isReady = false;
+        isAuthenticated = false;
         currentQrImage = null;
+        statusMessage = "Client disconnesso. In attesa di ripristino...";
         console.log('[WHATSAPP] Client disconnesso:', reason);
     });
 
     const handleSendMessage = async (req, res) => {
         if (!isReady) {
-            return res.status(503).json({ error: 'WhatsApp non è ancora pronto.' });
+            return res.status(503).json({ 
+                error: 'WhatsApp non è ancora pronto.', 
+                statusMessage, 
+                isReady, 
+                isAuthenticated 
+            });
         }
 
         const body = req.body || {};
