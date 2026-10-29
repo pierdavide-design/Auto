@@ -1,3 +1,4 @@
-httpx
-apscheduler
 google-genai
+apscheduler
+python-dotenv
+requests
