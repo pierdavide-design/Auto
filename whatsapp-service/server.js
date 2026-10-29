@@ -13,7 +13,7 @@ let isReady = false;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-    console.error('[ERRORE CRITICO] MONGO_URI mancante nelle variabili d'ambiente!');
+    console.error("[ERRORE CRITICO] MONGO_URI mancante nelle variabili d'ambiente!");
     process.exit(1);
 }
 
@@ -41,7 +41,8 @@ mongoose.connect(MONGO_URI).then(() => {
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--single-process'
             ]
         }
     });
@@ -101,8 +102,9 @@ mongoose.connect(MONGO_URI).then(() => {
     app.post('/send', handleSendMessage);
     app.post('/send-message', handleSendMessage);
 
-    app.listen(3000, () => {
-        console.log('[SERVER] Gateway Node.js attivo sulla porta 3000');
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`[SERVER] Gateway Node.js attivo sulla porta ${PORT}`);
     });
 
     client.initialize();
