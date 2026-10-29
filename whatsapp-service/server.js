@@ -1,3 +1,5 @@
+global.crypto = require('crypto');
+
 const express = require('express');
 const { Client, RemoteAuth } = require('whatsapp-web.js');
 const { MongoStore } = require('wwebjs-mongo');
@@ -9,6 +11,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let isReady = false;
+
+// Avvio immediato della porta per soddisfare il controllo di Render
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[SERVER] Gateway Node.js attivo sulla porta ${PORT}`);
+});
 
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -101,11 +109,6 @@ mongoose.connect(MONGO_URI).then(() => {
 
     app.post('/send', handleSendMessage);
     app.post('/send-message', handleSendMessage);
-
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`[SERVER] Gateway Node.js attivo sulla porta ${PORT}`);
-    });
 
     client.initialize();
 }).catch(err => {
