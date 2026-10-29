@@ -22,9 +22,9 @@ WORKDIR /app
 COPY whatsapp-service/package*.json ./whatsapp-service/
 RUN cd whatsapp-service && npm install
 
-# Copia e installa dipendenze Python
+# Copia e installa dipendenze Python con il flag esplicito
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copia tutto il progetto
 COPY . .
