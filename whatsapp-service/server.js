@@ -4,15 +4,35 @@ const express = require('express');
 const { Client, RemoteAuth } = require('whatsapp-web.js');
 const { MongoStore } = require('wwebjs-mongo');
 const mongoose = require('mongoose');
-const qrcode = require('qrcode-terminal');
+const qrcodeTerminal = require('qrcode-terminal');
+const QRCode = require('qrcode');
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let isReady = false;
+let currentQrImage = null; // Memorizza l'immagine QR generata
 
-// Avvio immediato della porta per soddisfare il controllo di Render
+// Endpoint per vedere il QR code formattato da browser
+app.get('/qr', async (req, res) => {
+    if (isReady) {
+        return res.send('<h2>WhatsApp è già connesso e pronto!</h2>');
+    }
+    if (!currentQrImage) {
+        return res.send('<h2>In attesa della generazione del codice QR... Ricarica tra qualche secondo.</h2>');
+    }
+    res.send(`
+        <html>
+            <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
+                <h2>Scansiona il codice QR con WhatsApp</h2>
+                <img src="${currentQrImage}" style="border: 10px solid white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" />
+                <p>Apri WhatsApp > Dispositivi collegati > Inquadra il codice</p>
+            </body>
+        </html>
+    `);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Gateway Node.js attivo sulla porta ${PORT}`);
@@ -55,13 +75,21 @@ mongoose.connect(MONGO_URI).then(() => {
         }
     });
 
-    client.on('qr', (qr) => {
-        console.log('[WHATSAPP] Scansiona questo codice QR nei log:');
-        qrcode.generate(qr, { small: true });
+    client.on('qr', async (qr) => {
+        console.log('[WHATSAPP] Nuovo codice QR generato.');
+        qrcodeTerminal.generate(qr, { small: true });
+        
+        // Converte il QR in un'immagine Base64 per la pagina web
+        try {
+            currentQrImage = await QRCode.toDataURL(qr);
+        } catch (err) {
+            console.error('[ERRORE QR GENERATION]:', err);
+        }
     });
 
     client.on('ready', () => {
         isReady = true;
+        currentQrImage = null;
         console.log('[WHATSAPP] Client connesso e pronto!');
     });
 
@@ -71,6 +99,7 @@ mongoose.connect(MONGO_URI).then(() => {
 
     client.on('disconnected', (reason) => {
         isReady = false;
+        currentQrImage = null;
         console.log('[WHATSAPP] Client disconnesso:', reason);
     });
 
