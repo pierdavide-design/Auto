@@ -12,15 +12,29 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let isReady = false;
-let currentQrImage = null; // Memorizza l'immagine QR generata
+let currentQrImage = null;
 
-// Endpoint per vedere il QR code formattato da browser
+// Endpoint per vedere lo stato e il QR code via browser
 app.get('/qr', async (req, res) => {
     if (isReady) {
-        return res.send('<h2>WhatsApp è già connesso e pronto!</h2>');
+        return res.send(`
+            <html>
+                <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
+                    <h2 style="color: #2e7d32;">✅ WhatsApp è già connesso e pronto!</h2>
+                    <p>La sessione è attiva e salvata su MongoDB.</p>
+                </body>
+            </html>
+        `);
     }
     if (!currentQrImage) {
-        return res.send('<h2>In attesa della generazione del codice QR... Ricarica tra qualche secondo.</h2>');
+        return res.send(`
+            <html>
+                <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
+                    <h2>In attesa del codice QR...</h2>
+                    <p>Ricarica la pagina tra qualche secondo.</p>
+                </body>
+            </html>
+        `);
     }
     res.send(`
         <html>
@@ -70,7 +84,11 @@ mongoose.connect(MONGO_URI).then(() => {
                 '--no-first-run',
                 '--no-zygote',
                 '--disable-gpu',
-                '--single-process'
+                '--single-process',
+                '--disable-extensions',
+                '--disable-component-update',
+                '--no-default-browser-check',
+                '--js-flags="--max-old-space-size=256"'
             ]
         }
     });
@@ -79,7 +97,6 @@ mongoose.connect(MONGO_URI).then(() => {
         console.log('[WHATSAPP] Nuovo codice QR generato.');
         qrcodeTerminal.generate(qr, { small: true });
         
-        // Converte il QR in un'immagine Base64 per la pagina web
         try {
             currentQrImage = await QRCode.toDataURL(qr);
         } catch (err) {
